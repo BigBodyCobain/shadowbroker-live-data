@@ -25,7 +25,9 @@ limit it starts the next one.
 
 Repository secrets (data-feed keys, all optional; a missing one only empties
 its layers): `OPENSKY_CLIENT_ID`, `OPENSKY_CLIENT_SECRET`, `AIS_API_KEY`,
-`FIRMS_MAP_KEY`, `GFW_API_TOKEN`.
+`FIRMS_MAP_KEY`, `GFW_API_TOKEN`. Optional extras: `OPENAQ_API_KEY` (air quality),
+`ALERTS_IN_UA_TOKEN` (Ukraine air-raid alerts), `LTA_ACCOUNT_KEY` (Singapore
+traffic cameras), `AISHUB_USERNAME` (backup ship source).
 
 Repository variables (optional): `PUBLISH_EVERY_S` (seconds between
 publishes, default 180) and `SOURCE_REF` (ShadowBroker branch, tag or commit

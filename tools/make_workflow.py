@@ -89,6 +89,11 @@ jobs:
           AIS_API_KEY: ${{ secrets.AIS_API_KEY }}
           FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
           GFW_API_TOKEN: ${{ secrets.GFW_API_TOKEN }}
+          # Optional extras. A secret that is not set leaves its layer empty and nothing else changes.
+          OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}            # air quality
+          ALERTS_IN_UA_TOKEN: ${{ secrets.ALERTS_IN_UA_TOKEN }}    # Ukraine air-raid alerts
+          LTA_ACCOUNT_KEY: ${{ secrets.LTA_ACCOUNT_KEY }}          # Singapore traffic cameras
+          AISHUB_USERNAME: ${{ secrets.AISHUB_USERNAME }}          # backup ship source
         run: |
           cd sb/backend
           nohup uv run --no-sync python ../viewer/engine/run_public_engine.py --port 8011 \\
