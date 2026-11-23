@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import calendar
 import json
+import math
 import os
 import re
 import shutil
@@ -62,6 +63,76 @@ def manifest_age_s(manifest: dict) -> float:
     return time.time() - calendar.timegm(stamp)
 
 
+# A small thinned-out copy of the moving layers, for the website's front-page globe.
+# It is built only from the files being published in this same snapshot.
+GLOBE_CAPS = {"aircraft": 1800, "military": 300, "tracked": 400, "ships": 1800, "satellites": 600, "fires": 400}
+
+
+def _sample(items, cap: int, extra=None) -> list:
+    """Up to ``cap`` [lat, lng] pairs, taken evenly across the list."""
+    if not isinstance(items, list) or not items:
+        return []
+    step = max(1, math.ceil(len(items) / cap))
+    out = []
+    for item in items[::step]:
+        if not isinstance(item, dict):
+            continue
+        lat, lng = item.get("lat"), item.get("lng")
+        if not isinstance(lat, (int, float)) or not isinstance(lng, (int, float)):
+            continue
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            continue
+        row = [round(lat, 2), round(lng, 2)]
+        if extra:
+            row.append(extra(item))
+        out.append(row)
+    return out
+
+
+def build_globe(manifest: dict, files: dict) -> bytes:
+    """The globe file as JSON bytes. Raises on unexpected data; the caller treats that as 'no globe file'."""
+    bundles: dict = {}
+
+    def layer(name: str):
+        ref = (manifest.get("keys") or {}).get(name)
+        if isinstance(ref, dict) and ref.get("f") in files:
+            return json.loads(files[ref["f"]].decode("utf-8"))
+        for bundle_ref in (manifest.get("bundles") or {}).values():
+            path = bundle_ref.get("f")
+            if path not in bundles:
+                bundles[path] = json.loads(files[path].decode("utf-8"))
+            if isinstance(bundles[path], dict) and name in bundles[path]:
+                return bundles[path][name]
+        return None
+
+    def count(value) -> int:
+        return len(value) if isinstance(value, list) else 0
+
+    civil = []
+    for name in ("commercial_flights", "private_flights", "private_jets"):
+        civil += layer(name) or []
+    military, tracked = layer("military_flights"), layer("tracked_flights")
+    ships, sats, fires = layer("ships"), layer("satellites"), layer("firms_fires")
+    hot = sorted((f for f in fires or [] if isinstance(f, dict)), key=lambda f: -(f.get("frp") or 0))
+    globe = {
+        "schema": 1,
+        "generated_at": manifest.get("generated_at"),
+        "totals": {
+            "aircraft": len(civil) + count(military) + count(tracked),
+            "ships": count(ships),
+            "satellites": count(sats),
+            "fires": count(fires),
+        },
+        "aircraft": _sample(civil, GLOBE_CAPS["aircraft"]),
+        "military": _sample(military, GLOBE_CAPS["military"]),
+        "tracked": _sample(tracked, GLOBE_CAPS["tracked"]),
+        "ships": _sample(ships, GLOBE_CAPS["ships"]),
+        "satellites": _sample(sats, GLOBE_CAPS["satellites"], lambda s: round(float(s.get("alt_km") or 550))),
+        "fires": _sample(hot[: GLOBE_CAPS["fires"]], GLOBE_CAPS["fires"]),
+    }
+    return json.dumps(globe, separators=(",", ":")).encode("utf-8")
+
+
 def snapshot(data_dir: Path, site_dir: Path) -> dict:
     """Copy the manifest and the files it names. Returns the manifest."""
     blob = (data_dir / "manifest.json").read_bytes()
@@ -81,6 +152,10 @@ def snapshot(data_dir: Path, site_dir: Path) -> dict:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content)
     (site_dir / "index.html").write_text(INDEX_HTML, encoding="utf-8")
+    try:
+        (site_dir / "globe.json").write_bytes(build_globe(manifest, files))
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        print(f"no globe file this round: {type(exc).__name__}")
     manifest["_files"] = len(files)
     manifest["_bytes"] = total
     return manifest
