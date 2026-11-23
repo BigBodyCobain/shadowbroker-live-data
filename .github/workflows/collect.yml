@@ -1,0 +1,466 @@
+# Written by tools/make_workflow.py. Edit that file, not this one.
+#
+# Runs the ShadowBroker public collector on a GitHub machine and publishes its
+# data files to this repository's GitHub Pages site every few minutes.
+#
+# Nothing here is reachable from outside: the collector listens on the
+# runner's loopback only, the runner is thrown away after the run, and the
+# only thing that leaves it is the set of public data files.
+name: Collect and publish
+
+on:
+  workflow_dispatch:
+  schedule:
+    # A safety net: each run starts the next one itself when it ends.
+    - cron: "17 */5 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    permissions:
+      contents: read
+      pages: write      # publish the data files
+      id-token: write   # required by the Pages deploy step
+      actions: write    # remove its own uploads; start the next run
+    environment:
+      name: github-pages
+    env:
+      RUN_MINUTES: "325"                                   # stop publishing after this long
+      PUBLISH_EVERY: ${{ vars.PUBLISH_EVERY_S || '180' }}  # seconds between publishes
+      SOURCE_REF: ${{ vars.SOURCE_REF || 'main' }}         # which ShadowBroker version to run
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Get ShadowBroker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: BigBodyCobain/Shadowbroker
+          ref: ${{ env.SOURCE_REF }}
+          path: sb
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: sb/uv.lock
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Install
+        run: |
+          cd sb/backend
+          uv sync --frozen --no-dev
+          npm ci --omit=dev --no-audit --no-fund
+
+      - name: Start the collector
+        # The feed keys exist only in this step's environment. The collector's
+        # own output goes to a file on the runner and is never printed.
+        env:
+          OPENSKY_CLIENT_ID: ${{ secrets.OPENSKY_CLIENT_ID }}
+          OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
+          AIS_API_KEY: ${{ secrets.AIS_API_KEY }}
+          FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
+          GFW_API_TOKEN: ${{ secrets.GFW_API_TOKEN }}
+        run: |
+          cd sb/backend
+          nohup uv run --no-sync python ../viewer/engine/run_public_engine.py --port 8011 \
+            > "$RUNNER_TEMP/engine.log" 2>&1 &
+          nohup uv run --no-sync python ../viewer/bridge/bridge.py --engine http://127.0.0.1:8011 \
+            --out "$RUNNER_TEMP/data" --lookup-index 120 > "$RUNNER_TEMP/bridge.log" 2>&1 &
+          echo "PUBLISH_UNTIL=$(( $(date +%s) + RUN_MINUTES * 60 ))" >> "$GITHUB_ENV"
+          echo "PUBLISH_EVERY_S=$PUBLISH_EVERY" >> "$GITHUB_ENV"
+
+      - name: Warm up
+        run: python3 tools/warmup.py --data "$RUNNER_TEMP/data" --need ships=12000 --need commercial_flights=3000 --need cctv=20000 --min-wait 120 --max-wait 900
+
+      - uses: ./.github/actions/publish
+        with: { slot: "001" }
+      - uses: ./.github/actions/publish
+        with: { slot: "002" }
+      - uses: ./.github/actions/publish
+        with: { slot: "003" }
+      - uses: ./.github/actions/publish
+        with: { slot: "004" }
+      - uses: ./.github/actions/publish
+        with: { slot: "005" }
+      - uses: ./.github/actions/publish
+        with: { slot: "006" }
+      - uses: ./.github/actions/publish
+        with: { slot: "007" }
+      - uses: ./.github/actions/publish
+        with: { slot: "008" }
+      - uses: ./.github/actions/publish
+        with: { slot: "009" }
+      - uses: ./.github/actions/publish
+        with: { slot: "010" }
+      - uses: ./.github/actions/publish
+        with: { slot: "011" }
+      - uses: ./.github/actions/publish
+        with: { slot: "012" }
+      - uses: ./.github/actions/publish
+        with: { slot: "013" }
+      - uses: ./.github/actions/publish
+        with: { slot: "014" }
+      - uses: ./.github/actions/publish
+        with: { slot: "015" }
+      - uses: ./.github/actions/publish
+        with: { slot: "016" }
+      - uses: ./.github/actions/publish
+        with: { slot: "017" }
+      - uses: ./.github/actions/publish
+        with: { slot: "018" }
+      - uses: ./.github/actions/publish
+        with: { slot: "019" }
+      - uses: ./.github/actions/publish
+        with: { slot: "020" }
+      - uses: ./.github/actions/publish
+        with: { slot: "021" }
+      - uses: ./.github/actions/publish
+        with: { slot: "022" }
+      - uses: ./.github/actions/publish
+        with: { slot: "023" }
+      - uses: ./.github/actions/publish
+        with: { slot: "024" }
+      - uses: ./.github/actions/publish
+        with: { slot: "025" }
+      - uses: ./.github/actions/publish
+        with: { slot: "026" }
+      - uses: ./.github/actions/publish
+        with: { slot: "027" }
+      - uses: ./.github/actions/publish
+        with: { slot: "028" }
+      - uses: ./.github/actions/publish
+        with: { slot: "029" }
+      - uses: ./.github/actions/publish
+        with: { slot: "030" }
+      - uses: ./.github/actions/publish
+        with: { slot: "031" }
+      - uses: ./.github/actions/publish
+        with: { slot: "032" }
+      - uses: ./.github/actions/publish
+        with: { slot: "033" }
+      - uses: ./.github/actions/publish
+        with: { slot: "034" }
+      - uses: ./.github/actions/publish
+        with: { slot: "035" }
+      - uses: ./.github/actions/publish
+        with: { slot: "036" }
+      - uses: ./.github/actions/publish
+        with: { slot: "037" }
+      - uses: ./.github/actions/publish
+        with: { slot: "038" }
+      - uses: ./.github/actions/publish
+        with: { slot: "039" }
+      - uses: ./.github/actions/publish
+        with: { slot: "040" }
+      - uses: ./.github/actions/publish
+        with: { slot: "041" }
+      - uses: ./.github/actions/publish
+        with: { slot: "042" }
+      - uses: ./.github/actions/publish
+        with: { slot: "043" }
+      - uses: ./.github/actions/publish
+        with: { slot: "044" }
+      - uses: ./.github/actions/publish
+        with: { slot: "045" }
+      - uses: ./.github/actions/publish
+        with: { slot: "046" }
+      - uses: ./.github/actions/publish
+        with: { slot: "047" }
+      - uses: ./.github/actions/publish
+        with: { slot: "048" }
+      - uses: ./.github/actions/publish
+        with: { slot: "049" }
+      - uses: ./.github/actions/publish
+        with: { slot: "050" }
+      - uses: ./.github/actions/publish
+        with: { slot: "051" }
+      - uses: ./.github/actions/publish
+        with: { slot: "052" }
+      - uses: ./.github/actions/publish
+        with: { slot: "053" }
+      - uses: ./.github/actions/publish
+        with: { slot: "054" }
+      - uses: ./.github/actions/publish
+        with: { slot: "055" }
+      - uses: ./.github/actions/publish
+        with: { slot: "056" }
+      - uses: ./.github/actions/publish
+        with: { slot: "057" }
+      - uses: ./.github/actions/publish
+        with: { slot: "058" }
+      - uses: ./.github/actions/publish
+        with: { slot: "059" }
+      - uses: ./.github/actions/publish
+        with: { slot: "060" }
+      - uses: ./.github/actions/publish
+        with: { slot: "061" }
+      - uses: ./.github/actions/publish
+        with: { slot: "062" }
+      - uses: ./.github/actions/publish
+        with: { slot: "063" }
+      - uses: ./.github/actions/publish
+        with: { slot: "064" }
+      - uses: ./.github/actions/publish
+        with: { slot: "065" }
+      - uses: ./.github/actions/publish
+        with: { slot: "066" }
+      - uses: ./.github/actions/publish
+        with: { slot: "067" }
+      - uses: ./.github/actions/publish
+        with: { slot: "068" }
+      - uses: ./.github/actions/publish
+        with: { slot: "069" }
+      - uses: ./.github/actions/publish
+        with: { slot: "070" }
+      - uses: ./.github/actions/publish
+        with: { slot: "071" }
+      - uses: ./.github/actions/publish
+        with: { slot: "072" }
+      - uses: ./.github/actions/publish
+        with: { slot: "073" }
+      - uses: ./.github/actions/publish
+        with: { slot: "074" }
+      - uses: ./.github/actions/publish
+        with: { slot: "075" }
+      - uses: ./.github/actions/publish
+        with: { slot: "076" }
+      - uses: ./.github/actions/publish
+        with: { slot: "077" }
+      - uses: ./.github/actions/publish
+        with: { slot: "078" }
+      - uses: ./.github/actions/publish
+        with: { slot: "079" }
+      - uses: ./.github/actions/publish
+        with: { slot: "080" }
+      - uses: ./.github/actions/publish
+        with: { slot: "081" }
+      - uses: ./.github/actions/publish
+        with: { slot: "082" }
+      - uses: ./.github/actions/publish
+        with: { slot: "083" }
+      - uses: ./.github/actions/publish
+        with: { slot: "084" }
+      - uses: ./.github/actions/publish
+        with: { slot: "085" }
+      - uses: ./.github/actions/publish
+        with: { slot: "086" }
+      - uses: ./.github/actions/publish
+        with: { slot: "087" }
+      - uses: ./.github/actions/publish
+        with: { slot: "088" }
+      - uses: ./.github/actions/publish
+        with: { slot: "089" }
+      - uses: ./.github/actions/publish
+        with: { slot: "090" }
+      - uses: ./.github/actions/publish
+        with: { slot: "091" }
+      - uses: ./.github/actions/publish
+        with: { slot: "092" }
+      - uses: ./.github/actions/publish
+        with: { slot: "093" }
+      - uses: ./.github/actions/publish
+        with: { slot: "094" }
+      - uses: ./.github/actions/publish
+        with: { slot: "095" }
+      - uses: ./.github/actions/publish
+        with: { slot: "096" }
+      - uses: ./.github/actions/publish
+        with: { slot: "097" }
+      - uses: ./.github/actions/publish
+        with: { slot: "098" }
+      - uses: ./.github/actions/publish
+        with: { slot: "099" }
+      - uses: ./.github/actions/publish
+        with: { slot: "100" }
+      - uses: ./.github/actions/publish
+        with: { slot: "101" }
+      - uses: ./.github/actions/publish
+        with: { slot: "102" }
+      - uses: ./.github/actions/publish
+        with: { slot: "103" }
+      - uses: ./.github/actions/publish
+        with: { slot: "104" }
+      - uses: ./.github/actions/publish
+        with: { slot: "105" }
+      - uses: ./.github/actions/publish
+        with: { slot: "106" }
+      - uses: ./.github/actions/publish
+        with: { slot: "107" }
+      - uses: ./.github/actions/publish
+        with: { slot: "108" }
+      - uses: ./.github/actions/publish
+        with: { slot: "109" }
+      - uses: ./.github/actions/publish
+        with: { slot: "110" }
+      - uses: ./.github/actions/publish
+        with: { slot: "111" }
+      - uses: ./.github/actions/publish
+        with: { slot: "112" }
+      - uses: ./.github/actions/publish
+        with: { slot: "113" }
+      - uses: ./.github/actions/publish
+        with: { slot: "114" }
+      - uses: ./.github/actions/publish
+        with: { slot: "115" }
+      - uses: ./.github/actions/publish
+        with: { slot: "116" }
+      - uses: ./.github/actions/publish
+        with: { slot: "117" }
+      - uses: ./.github/actions/publish
+        with: { slot: "118" }
+      - uses: ./.github/actions/publish
+        with: { slot: "119" }
+      - uses: ./.github/actions/publish
+        with: { slot: "120" }
+      - uses: ./.github/actions/publish
+        with: { slot: "121" }
+      - uses: ./.github/actions/publish
+        with: { slot: "122" }
+      - uses: ./.github/actions/publish
+        with: { slot: "123" }
+      - uses: ./.github/actions/publish
+        with: { slot: "124" }
+      - uses: ./.github/actions/publish
+        with: { slot: "125" }
+      - uses: ./.github/actions/publish
+        with: { slot: "126" }
+      - uses: ./.github/actions/publish
+        with: { slot: "127" }
+      - uses: ./.github/actions/publish
+        with: { slot: "128" }
+      - uses: ./.github/actions/publish
+        with: { slot: "129" }
+      - uses: ./.github/actions/publish
+        with: { slot: "130" }
+      - uses: ./.github/actions/publish
+        with: { slot: "131" }
+      - uses: ./.github/actions/publish
+        with: { slot: "132" }
+      - uses: ./.github/actions/publish
+        with: { slot: "133" }
+      - uses: ./.github/actions/publish
+        with: { slot: "134" }
+      - uses: ./.github/actions/publish
+        with: { slot: "135" }
+      - uses: ./.github/actions/publish
+        with: { slot: "136" }
+      - uses: ./.github/actions/publish
+        with: { slot: "137" }
+      - uses: ./.github/actions/publish
+        with: { slot: "138" }
+      - uses: ./.github/actions/publish
+        with: { slot: "139" }
+      - uses: ./.github/actions/publish
+        with: { slot: "140" }
+      - uses: ./.github/actions/publish
+        with: { slot: "141" }
+      - uses: ./.github/actions/publish
+        with: { slot: "142" }
+      - uses: ./.github/actions/publish
+        with: { slot: "143" }
+      - uses: ./.github/actions/publish
+        with: { slot: "144" }
+      - uses: ./.github/actions/publish
+        with: { slot: "145" }
+      - uses: ./.github/actions/publish
+        with: { slot: "146" }
+      - uses: ./.github/actions/publish
+        with: { slot: "147" }
+      - uses: ./.github/actions/publish
+        with: { slot: "148" }
+      - uses: ./.github/actions/publish
+        with: { slot: "149" }
+      - uses: ./.github/actions/publish
+        with: { slot: "150" }
+      - uses: ./.github/actions/publish
+        with: { slot: "151" }
+      - uses: ./.github/actions/publish
+        with: { slot: "152" }
+      - uses: ./.github/actions/publish
+        with: { slot: "153" }
+      - uses: ./.github/actions/publish
+        with: { slot: "154" }
+      - uses: ./.github/actions/publish
+        with: { slot: "155" }
+      - uses: ./.github/actions/publish
+        with: { slot: "156" }
+      - uses: ./.github/actions/publish
+        with: { slot: "157" }
+      - uses: ./.github/actions/publish
+        with: { slot: "158" }
+      - uses: ./.github/actions/publish
+        with: { slot: "159" }
+      - uses: ./.github/actions/publish
+        with: { slot: "160" }
+      - uses: ./.github/actions/publish
+        with: { slot: "161" }
+      - uses: ./.github/actions/publish
+        with: { slot: "162" }
+      - uses: ./.github/actions/publish
+        with: { slot: "163" }
+      - uses: ./.github/actions/publish
+        with: { slot: "164" }
+      - uses: ./.github/actions/publish
+        with: { slot: "165" }
+      - uses: ./.github/actions/publish
+        with: { slot: "166" }
+      - uses: ./.github/actions/publish
+        with: { slot: "167" }
+      - uses: ./.github/actions/publish
+        with: { slot: "168" }
+      - uses: ./.github/actions/publish
+        with: { slot: "169" }
+      - uses: ./.github/actions/publish
+        with: { slot: "170" }
+      - uses: ./.github/actions/publish
+        with: { slot: "171" }
+      - uses: ./.github/actions/publish
+        with: { slot: "172" }
+      - uses: ./.github/actions/publish
+        with: { slot: "173" }
+      - uses: ./.github/actions/publish
+        with: { slot: "174" }
+      - uses: ./.github/actions/publish
+        with: { slot: "175" }
+      - uses: ./.github/actions/publish
+        with: { slot: "176" }
+      - uses: ./.github/actions/publish
+        with: { slot: "177" }
+      - uses: ./.github/actions/publish
+        with: { slot: "178" }
+      - uses: ./.github/actions/publish
+        with: { slot: "179" }
+      - uses: ./.github/actions/publish
+        with: { slot: "180" }
+
+      - name: Start the next run
+        # Only after a run that worked for a while. If something is broken, the
+        # timer above tries again later instead of restarting in a tight loop.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(date +%s)" -ge "$(( PUBLISH_UNTIL - RUN_MINUTES * 60 + 1800 ))" ]; then
+            gh workflow run collect.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
+          else
+            echo "This run ended early; leaving the restart to the timer."
+          fi
+
+      - name: Collector status (on failure)
+        if: ${{ failure() }}
+        # The bridge only ever talks to the runner's own loopback, so its log is safe to show.
+        run: tail -n 40 "$RUNNER_TEMP/bridge.log" || true

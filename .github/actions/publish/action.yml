@@ -1,0 +1,46 @@
+name: Publish one data snapshot
+description: Wait for the next slot, then publish the collector's current data files to GitHub Pages.
+
+inputs:
+  slot:
+    description: A label that is unique within the run (used for the artifact name).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for the slot and take a snapshot
+      id: snap
+      shell: bash
+      run: |
+        python3 "$GITHUB_WORKSPACE/tools/snapshot.py" \
+          --data "$RUNNER_TEMP/data" --site "$RUNNER_TEMP/site" \
+          --state "$RUNNER_TEMP/publish-state.json" \
+          --every "$PUBLISH_EVERY_S" --until "$PUBLISH_UNTIL"
+
+    - name: Upload
+      id: upload
+      if: steps.snap.outputs.publish == 'true'
+      continue-on-error: true
+      uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+      with:
+        name: data-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.slot }}
+        path: ${{ runner.temp }}/site
+        retention-days: 1
+
+    - name: Deploy
+      if: steps.snap.outputs.publish == 'true' && steps.upload.outcome == 'success'
+      continue-on-error: true
+      uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      with:
+        artifact_name: data-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.slot }}
+        timeout: 240000
+
+    - name: Remove the uploaded copy
+      if: steps.snap.outputs.publish == 'true' && steps.upload.outcome == 'success'
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        ARTIFACT_ID: ${{ steps.upload.outputs.artifact_id }}
+      run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" --silent || true
