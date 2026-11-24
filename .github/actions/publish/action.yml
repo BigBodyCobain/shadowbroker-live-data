@@ -50,6 +50,11 @@ runs:
       if: steps.snap.outputs.publish == 'true' && steps.upload.outcome == 'success'
       continue-on-error: true
       uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      env:
+        # Pages keys each deployment by this version string and expects it to
+        # be unique. The action uses the commit SHA, which repeats on every
+        # publish of a run; on 2026-11-24 Pages stopped applying the repeats.
+        GITHUB_SHA: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.slot }}
       with:
         artifact_name: data-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.slot }}
         timeout: 240000
@@ -63,6 +68,11 @@ runs:
       if: steps.snap.outputs.publish == 'true' && steps.upload.outcome == 'success' && steps.deploy.outcome == 'failure'
       continue-on-error: true
       uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      env:
+        # Pages keys each deployment by this version string and expects it to
+        # be unique. The action uses the commit SHA, which repeats on every
+        # publish of a run; on 2026-11-24 Pages stopped applying the repeats.
+        GITHUB_SHA: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.slot }}-b
       with:
         artifact_name: data-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.slot }}
         timeout: 240000
