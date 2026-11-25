@@ -10,7 +10,9 @@ The map itself is at https://shadowbroker.dev/map/.
 ShadowBroker, and runs its public engine and bridge (`viewer/engine`,
 `viewer/bridge`) on the runner's loopback. Every few minutes the bridge's
 output folder is published as the Pages site. When a run nears GitHub's time
-limit it starts the next one.
+limit it starts the next one, after first committing `restart-marker.txt`.
+Pages stops serving new files after a few hours of deploys from the same
+commit, so each run gets a commit of its own.
 
 - Nothing listens for outside connections. The runner is discarded after
   each run.

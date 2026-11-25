@@ -29,7 +29,9 @@ jobs:
       contents: read
       pages: write      # publish the data files
       id-token: write   # required by the Pages deploy step
-      actions: write    # remove its own uploads; start the next run
+      actions: write    # remove its own uploads
+    outputs:
+      restart: ${{ steps.decide.outputs.restart }}
     environment:
       name: github-pages
     env:
@@ -453,15 +455,15 @@ jobs:
       - uses: ./.github/actions/publish
         with: { slot: "180" }
 
-      - name: Start the next run
+      - name: Decide whether to start the next run
+        id: decide
         # Only after a run that worked for a while. If something is broken, the
         # timer above tries again later instead of restarting in a tight loop.
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$(date +%s)" -ge "$(( PUBLISH_UNTIL - RUN_MINUTES * 60 + 1800 ))" ]; then
-            gh workflow run collect.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
+            echo "restart=true" >> "$GITHUB_OUTPUT"
           else
+            echo "restart=false" >> "$GITHUB_OUTPUT"
             echo "This run ended early; leaving the restart to the timer."
           fi
 
@@ -469,3 +471,32 @@ jobs:
         if: ${{ failure() }}
         # The bridge only ever talks to the runner's own loopback, so its log is safe to show.
         run: tail -n 40 "$RUNNER_TEMP/bridge.log" || true
+
+  next:
+    # Starts the next run on a new commit. After about 190 deploys of the same
+    # commit (6.5 hours at one every 2 minutes), Pages keeps reporting success
+    # but stops serving the new files, so every run needs its own commit.
+    # This job is separate so the collector never holds write access to the repo.
+    needs: collect
+    if: needs.collect.outputs.restart == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write   # one small commit to restart-marker.txt
+      actions: write    # start the next run
+    steps:
+      - name: Start the next run on a new commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MARKER: restart-marker.txt
+        run: |
+          old=$(gh api "repos/$GITHUB_REPOSITORY/contents/$MARKER?ref=$GITHUB_REF_NAME" --jq .sha 2>/dev/null || true)
+          text=$(printf 'Collector restarted at %s after run %s.\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$GITHUB_RUN_ID" | base64 -w0)
+          if gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/$MARKER" --silent \
+              -f message="Collector restart" -f content="$text" -f branch="$GITHUB_REF_NAME" \
+              ${old:+-f sha="$old"}; then
+            echo "new commit: $(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_REF_NAME" --jq .sha)"
+          else
+            echo "::warning::Could not write the restart marker; the next run reuses this commit."
+          fi
+          gh workflow run collect.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
