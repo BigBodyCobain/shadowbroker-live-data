@@ -45,24 +45,9 @@ runs:
         done
         echo "not listed after 30 s; trying the deploy anyway"
 
-    # Pages keys each deployment by its version string. actions/deploy-pages
-    # always sends the commit SHA, which repeats on every publish of a run,
-    # and after a while Pages stops applying the repeats while still saying
-    # "success". A step cannot override GITHUB_SHA, so tools/deploy_pages.py
-    # makes the same API calls with a version unique to this publish.
     - name: Deploy
       id: deploy
       if: steps.snap.outputs.publish == 'true' && steps.upload.outcome == 'success'
-      continue-on-error: true
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
-        ARTIFACT_ID: ${{ steps.upload.outputs.artifact_id }}
-        BUILD_VERSION: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.slot }}
-      run: python3 "$GITHUB_WORKSPACE/tools/deploy_pages.py"
-
-    - name: Deploy with the standard action instead
-      if: steps.snap.outputs.publish == 'true' && steps.upload.outcome == 'success' && steps.deploy.outcome == 'failure'
       continue-on-error: true
       uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
       with:
